@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matriz de Atividades do Time</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; font-size: 13px; }
+  .wrapper { background: #1e1e2f; min-height: 100vh; padding: 24px; }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #27ae60; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 12px; font-weight: 600; z-index: 200; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  .toast.error { background: #e74c3c; }
+  .toast.show { opacity: 1; }
+
+  .loading-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 150; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
+  .loading-overlay.active { display: flex; }
+  .spinner { width: 36px; height: 36px; border: 3px solid #333; border-top-color: #27ae60; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-overlay p { color: #ccc; font-size: 13px; }
+
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+  .header-left h1 { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .header-left p { font-size: 11px; color: #888; }
+  .header-right { display: flex; gap: 10px; align-items: center; }
+  .btn-refresh { background: transparent; border: 1px solid #555; color: #ccc; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+  .btn-refresh:hover { border-color: #888; color: #fff; }
+  .btn-export { background: transparent; border: 1px solid #555; color: #ccc; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
+  .btn-export:hover { border-color: #888; color: #fff; }
+  .btn-nova { background: #27ae60; border: none; color: #fff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; transition: background 0.2s; }
+  .btn-nova:hover { background: #219a52; }
+
+  .kpi-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .kpi-card { background: #252538; border: 1px solid #333; border-radius: 8px; padding: 14px 18px; flex: 1; min-width: 140px; }
+  .kpi-card .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #777; margin-bottom: 6px; }
+  .kpi-card .value { font-size: 28px; font-weight: 700; color: #fff; line-height: 1; margin-bottom: 4px; }
+  .kpi-card .sub { font-size: 11px; color: #666; }
+  .kpi-card.warn .value { color: #e67e22; }
+  .kpi-card.danger .value { color: #e74c3c; }
+  .kpi-card.info .value { color: #3498db; }
+  .kpi-card.critical .value { color: #9b59b6; }
+
+  .filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .search-box { position: relative; flex: 0 0 180px; }
+  .search-box input { background: #252538; border: 1px solid #3a3a55; color: #ccc; padding: 7px 10px 7px 32px; border-radius: 6px; font-size: 12px; width: 100%; outline: none; }
+  .search-box::before { content: '🔍'; position: absolute; left: 9px; top: 50%; transform: translateY(-50%); font-size: 11px; opacity: 0.5; }
+  .filter-select { background: #252538; border: 1px solid #3a3a55; color: #ccc; padding: 7px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; outline: none; }
+
+  .table-wrapper { background: #252538; border: 1px solid #333; border-radius: 10px; overflow: hidden; }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 1100px; }
+  thead th { background: #1e1e2f; color: #888; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px; text-align: left; border-bottom: 1px solid #333; white-space: nowrap; }
+  tbody tr { border-bottom: 1px solid #2e2e45; transition: background 0.15s; }
+  tbody tr:hover { background: #2a2a40; }
+  tbody tr:last-child { border-bottom: none; }
+  td { padding: 10px 12px; vertical-align: middle; }
+
+  .area-cell { min-width: 120px; }
+  .area-name { font-size: 12px; color: #ccc; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+  .area-badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 3px; color: #fff; white-space: nowrap; }
+  .badge-facilities { background: #2980b9; }
+  .badge-pcm { background: #8e44ad; }
+  .badge-almoxarifado { background: #c0392b; }
+  .badge-servadm { background: #16a085; }
+  .badge-recepcao { background: #d35400; }
+  .badge-hse { background: #27ae60; }
+  .badge-segpatrimonial { background: #2c3e50; }
+  .badge-predial { background: #7f8c8d; }
+  .badge-utilidades { background: #e67e22; }
+  .badge-engenharia { background: #1abc9c; }
+
+  .cargo-cell { font-size: 12px; color: #bbb; min-width: 140px; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .atividade-cell { font-size: 12px; color: #ddd; min-width: 180px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tempo-cell { font-size: 11px; color: #aaa; white-space: nowrap; }
+
+  .carga-cell { min-width: 110px; }
+  .carga-wrapper { display: flex; align-items: center; gap: 6px; }
+  .carga-num { font-size: 12px; font-weight: 600; color: #ccc; min-width: 24px; text-align: right; }
+  .carga-bar-bg { flex: 1; height: 5px; background: #333; border-radius: 3px; overflow: hidden; }
+  .carga-bar-fill { height: 100%; border-radius: 3px; background: #27ae60; }
+  .carga-bar-fill.medium { background: #e67e22; }
+  .carga-bar-fill.high { background: #e74c3c; }
+
+  .dropdown-cell { min-width: 130px; }
+  .pill-select-wrapper { display: flex; flex-direction: column; gap: 2px; }
+  .pill { display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 3px; width: fit-content; }
+  .pill-diaria   { background: #1abc9c22; color: #1abc9c; border: 1px solid #1abc9c55; }
+  .pill-semanal  { background: #3498db22; color: #3498db; border: 1px solid #3498db55; }
+  .pill-mensal   { background: #9b59b622; color: #9b59b6; border: 1px solid #9b59b655; }
+  .pill-alta     { background: #e74c3c22; color: #e74c3c; border: 1px solid #e74c3c55; }
+  .pill-media    { background: #e67e2222; color: #e67e22; border: 1px solid #e67e2255; }
+  .pill-baixa    { background: #27ae6022; color: #27ae60; border: 1px solid #27ae6055; }
+  .pill-sim      { background: #27ae6022; color: #27ae60; border: 1px solid #27ae6055; }
+  .pill-nao      { background: #e74c3c22; color: #e74c3c; border: 1px solid #e74c3c55; }
+  .pill-andamento{ background: #f39c1222; color: #f39c12; border: 1px solid #f39c1255; }
+  select.inline-select { background: transparent; border: none; color: inherit; font-size: 10px; font-weight: 600; cursor: pointer; outline: none; margin-top: 2px; -webkit-appearance: none; appearance: none; }
+
+  .toggle-cell { min-width: 160px; }
+  .toggle-wrapper { display: flex; flex-direction: column; gap: 4px; }
+  .toggle-row { display: flex; align-items: center; gap: 6px; }
+  .toggle { width: 32px; height: 17px; background: #27ae60; border-radius: 9px; position: relative; cursor: pointer; flex-shrink: 0; transition: background 0.2s; }
+  .toggle.off { background: #555; }
+  .toggle::after { content: ''; position: absolute; width: 13px; height: 13px; background: #fff; border-radius: 50%; top: 2px; left: 2px; transition: transform 0.2s; }
+  .toggle.on::after { transform: translateX(15px); }
+  .toggle-label { font-size: 11px; color: #aaa; }
+  .treinamento-quem { font-size: 11px; background: #1e1e2f; border: 1px solid #333; border-radius: 4px; padding: 3px 7px; width: 130px; outline: none; color: #ccc; }
+  .treinamento-quando { font-size: 10px; color: #666; font-style: italic; margin-top: 2px; }
+  .backup-cell { font-size: 12px; color: #888; min-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+
+  .table-footer { display: flex; justify-content: space-between; padding: 10px 16px; background: #1e1e2f; border-top: 1px solid #333; font-size: 11px; flex-wrap: wrap; gap: 8px; }
+  .footer-stat { color: #777; }
+  .footer-stat span { font-weight: 700; }
+  .footer-stat.warn span { color: #e67e22; }
+  .footer-stat.danger span { color: #e74c3c; }
+  .footer-stat.info span { color: #3498db; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.active { display: flex; }
+  .modal { background: #252538; border: 1px solid #3a3a55; border-radius: 12px; padding: 28px; width: 560px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+  .modal h2 { font-size: 16px; color: #fff; margin-bottom: 20px; font-weight: 600; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-group label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.4px; }
+  .form-group input, .form-group select { background: #1e1e2f; border: 1px solid #3a3a55; color: #ccc; padding: 8px 10px; border-radius: 6px; font-size: 12px; outline: none; font-family: inherit; }
+  .form-group input:focus, .form-group select:focus { border-color: #555; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .btn-cancel { background: transparent; border: 1px solid #555; color: #aaa; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .btn-save { background: #27ae60; border: none; color: #fff; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
+  .btn-save:hover { background: #219a52; }
+  .btn-del { background: transparent; border: none; color: #555; cursor: pointer; font-size: 14px; padding: 2px 5px; border-radius: 4px; transition: color 0.2s; }
+  .btn-del:hover { color: #e74c3c; }
+  .empty-state { text-align: center; padding: 48px; color: #555; }
+  .empty-state p { font-size: 14px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <div class="header">
+    <div class="header-left">
+      <h1>Matriz de Atividades do Time</h1>
+      <p>Facilities · PCM · Almoxarifado · Serv. Adm. · Recepção · HSE · Seg. Patrimonial · Predial · Utilidades · Engenharia</p>
+    </div>
+    <div class="header-right">
+      <button class="btn-refresh" onclick="loadData()">↺ Atualizar</button>
+      <button class="btn-export" onclick="exportCSV()">↓ Exportar CSV</button>
+      <button class="btn-nova" onclick="openModal()">+ Nova atividade</button>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="label">Atividades</div><div class="value" id="kpi-total">0</div><div class="sub" id="kpi-sub">0 áreas · 0 cargos</div></div>
+    <div class="kpi-card"><div class="label">Treinados</div><div class="value" id="kpi-treinados">0</div><div class="sub" id="kpi-treinados-sub">de 0</div></div>
+    <div class="kpi-card warn"><div class="label">Sem Treinamento</div><div class="value" id="kpi-semtrein">0</div><div class="sub">requer atenção</div></div>
+    <div class="kpi-card danger"><div class="label">Sem Backup</div><div class="value" id="kpi-sembackup">0</div><div class="sub">risco continuidade</div></div>
+    <div class="kpi-card info"><div class="label">Automatizáveis</div><div class="value" id="kpi-auto">0</div><div class="sub">incluindo em andamento</div></div>
+    <div class="kpi-card critical"><div class="label">Prioridade Crítica</div><div class="value" id="kpi-critica">0</div><div class="sub">atividades críticas</div></div>
+  </div>
+
+  <div class="filters">
+    <div class="search-box"><input type="text" id="search" placeholder="Buscar..." oninput="renderTable()"></div>
+    <select class="filter-select" id="f-area" onchange="renderTable()"><option value="">Todas as áreas</option></select>
+    <select class="filter-select" id="f-cargo" onchange="renderTable()"><option value="">Todos os cargos</option></select>
+    <select class="filter-select" id="f-freq" onchange="renderTable()">
+      <option value="">Frequência: todas</option>
+      <option>Diária</option><option>Semanal</option><option>Mensal</option><option>Trimestral</option><option>Anual</option>
+    </select>
+    <select class="filter-select" id="f-prio" onchange="renderTable()">
+      <option value="">Prioridade: todas</option><option>Alta</option><option>Média</option><option>Baixa</option>
+    </select>
+    <select class="filter-select" id="f-auto" onchange="renderTable()">
+      <option value="">Automação: todas</option><option>Sim</option><option>Não</option><option>Em andamento</option>
+    </select>
+    <select class="filter-select" id="f-trein" onchange="renderTable()">
+      <option value="">Treinamento: todos</option>
+      <option value="sim">Com treinamento</option><option value="nao">Sem treinamento</option>
+    </select>
+    <select class="filter-select" id="f-carga" onchange="renderTable()">
+      <option value="">Carga: todas</option>
+      <option value="baixa">Baixa (≤20%)</option><option value="media">Média (21–50%)</option><option value="alta">Alta (&gt;50%)</option>
+    </select>
+  </div>
+
+  <div class="table-wrapper">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Área</th><th>Cargo</th><th>Atividade</th><th>Tempo Est.</th>
+            <th>Carga (%)</th><th>Frequência</th><th>Prioridade</th><th>Automação</th>
+            <th>Treinamento</th><th>Backup</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+    <div class="table-footer">
+      <span class="footer-stat"><span id="ft-total">0</span> atividades</span>
+      <span class="footer-stat warn"><span id="ft-carga">0</span>% acum.</span>
+      <span class="footer-stat info"><span id="ft-auto">0</span> automatiz.</span>
+      <span class="footer-stat warn"><span id="ft-semtrein">0</span> sem trein.</span>
+      <span class="footer-stat danger"><span id="ft-sembackup">0</span> sem backup</span>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2 id="modal-title">Nova Atividade</h2>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Área</label>
+        <select id="m-area">
+          <option>Facilities</option><option>PCM</option><option>Almoxarifado</option>
+          <option>Serv. Administrativos</option><option>Recepção</option><option>HSE</option>
+          <option>Seg. Patrimonial</option><option>Predial</option><option>Utilidades</option><option>Engenharia</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Cargo</label><input type="text" id="m-cargo" placeholder="Ex: Supervisor Predial"></div>
+      <div class="form-group full"><label>Atividade</label><input type="text" id="m-atividade" placeholder="Descrição da atividade"></div>
+      <div class="form-group"><label>Tempo Estimado</label><input type="text" id="m-tempo" placeholder="Ex: 2h/dia"></div>
+      <div class="form-group"><label>Carga (%)</label><input type="number" id="m-carga" min="0" max="100" placeholder="0–100"></div>
+      <div class="form-group"><label>Frequência</label>
+        <select id="m-freq"><option>Diária</option><option>Semanal</option><option>Mensal</option><option>Trimestral</option><option>Anual</option></select>
+      </div>
+      <div class="form-group"><label>Prioridade</label>
+        <select id="m-prio"><option>Alta</option><option>Média</option><option>Baixa</option></select>
+      </div>
+      <div class="form-group"><label>Automação</label>
+        <select id="m-auto"><option>Não</option><option>Sim</option><option>Em andamento</option></select>
+      </div>
+      <div class="form-group"><label>Treinamento (quem treina)</label><input type="text" id="m-trein-quem" placeholder="Ex: Gestão"></div>
+      <div class="form-group"><label>Data do Treinamento</label><input type="text" id="m-trein-quando" placeholder="Ex: Jan/2024"></div>
+      <div class="form-group full"><label>Backup (quem cobre)</label><input type="text" id="m-backup" placeholder="Ex: Almoxarifado"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="saveActivity()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  <p id="loading-msg">Carregando...</p>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── CONFIGURAÇÃO ─────────────────────────────────────────
+const BIN_ID  = '6a313bc2f5f4af5e29facd8d';
+const API_KEY = '$2a$10$8yeCX1nzng/GyIoebmlYPuxQFzFfk5zNdNRmXqNUnmPBSZWmnstUC';
+const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+
+let activities = [];
+let editId = null;
+let saveTimer = null;
+
+// ── JSONBIN API ───────────────────────────────────────────
+async function loadData() {
+  showLoading('Carregando atividades...');
+  try {
+    const r = await fetch(BIN_URL + '/latest', {
+      headers: { 'X-Master-Key': API_KEY }
+    });
+    const d = await r.json();
+    activities = d.record.atividades || [];
+    renderTable();
+    showToast(`${activities.length} atividades carregadas ✓`);
+  } catch(e) {
+    showToast('Erro ao carregar dados', true);
+  } finally {
+    hideLoading();
+  }
+}
+
+async function saveData() {
+  try {
+    await fetch(BIN_URL, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': API_KEY
+      },
+      body: JSON.stringify({ atividades: activities })
+    });
+    showToast('Salvo ✓');
+  } catch(e) {
+    showToast('Erro ao salvar', true);
+  }
+}
+
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveData, 800);
+}
+
+// ── UI HELPERS ────────────────────────────────────────────
+function showLoading(msg) { document.getElementById('loading-msg').textContent = msg; document.getElementById('loading').classList.add('active'); }
+function hideLoading() { document.getElementById('loading').classList.remove('active'); }
+function showToast(msg, error) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (error?' error':'') + ' show';
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── BADGES / PILLS ────────────────────────────────────────
+const AREA_BADGE = {
+  'Facilities':'badge-facilities','PCM':'badge-pcm','Almoxarifado':'badge-almoxarifado',
+  'Serv. Administrativos':'badge-servadm','Recepção':'badge-recepcao','HSE':'badge-hse',
+  'Seg. Patrimonial':'badge-segpatrimonial','Predial':'badge-predial',
+  'Utilidades':'badge-utilidades','Engenharia':'badge-engenharia',
+};
+const freqPill = f => ({'Diária':'pill-diaria','Semanal':'pill-semanal','Mensal':'pill-mensal'}[f]||'pill-semanal');
+const prioPill = p => ({'Alta':'pill-alta','Média':'pill-media','Baixa':'pill-baixa'}[p]||'');
+const autoPill = a => a==='Sim'?'pill-sim':a==='Não'?'pill-nao':'pill-andamento';
+const cargaColor = c => c>50?'high':c>20?'medium':'';
+
+// ── FILTERS ───────────────────────────────────────────────
+function getFiltered() {
+  const search = document.getElementById('search').value.toLowerCase();
+  const fArea  = document.getElementById('f-area').value;
+  const fCargo = document.getElementById('f-cargo').value;
+  const fFreq  = document.getElementById('f-freq').value;
+  const fPrio  = document.getElementById('f-prio').value;
+  const fAuto  = document.getElementById('f-auto').value;
+  const fTrein = document.getElementById('f-trein').value;
+  const fCarga = document.getElementById('f-carga').value;
+  return activities.filter(a => {
+    if(search && !`${a.area} ${a.cargo} ${a.atividade}`.toLowerCase().includes(search)) return false;
+    if(fArea && a.area !== fArea) return false;
+    if(fCargo && a.cargo !== fCargo) return false;
+    if(fFreq && a.freq !== fFreq) return false;
+    if(fPrio && a.prio !== fPrio) return false;
+    if(fAuto && a.auto !== fAuto) return false;
+    if(fTrein === 'sim' && !a.treinSim) return false;
+    if(fTrein === 'nao' && a.treinSim) return false;
+    if(fCarga === 'baixa' && a.carga > 20) return false;
+    if(fCarga === 'media' && (a.carga <= 20 || a.carga > 50)) return false;
+    if(fCarga === 'alta' && a.carga <= 50) return false;
+    return true;
+  });
+}
+
+function updateFilters() {
+  const areas  = [...new Set(activities.map(a=>a.area))].sort();
+  const cargos = [...new Set(activities.map(a=>a.cargo))].sort();
+  const fa = document.getElementById('f-area'), curA = fa.value;
+  const fc = document.getElementById('f-cargo'), curC = fc.value;
+  fa.innerHTML = '<option value="">Todas as áreas</option>' + areas.map(a=>`<option ${a===curA?'selected':''}>${a}</option>`).join('');
+  fc.innerHTML = '<option value="">Todos os cargos</option>' + cargos.map(c=>`<option ${c===curC?'selected':''}>${c}</option>`).join('');
+}
+
+function updateKPIs() {
+  const total = activities.length;
+  document.getElementById('kpi-total').textContent = total;
+  document.getElementById('kpi-sub').textContent = `${new Set(activities.map(a=>a.area)).size} áreas · ${new Set(activities.map(a=>a.cargo)).size} cargos`;
+  const tr = activities.filter(a=>a.treinSim).length;
+  document.getElementById('kpi-treinados').textContent = tr;
+  document.getElementById('kpi-treinados-sub').textContent = `de ${total}`;
+  document.getElementById('kpi-semtrein').textContent = activities.filter(a=>!a.treinSim).length;
+  document.getElementById('kpi-sembackup').textContent = activities.filter(a=>!a.backup).length;
+  document.getElementById('kpi-auto').textContent = activities.filter(a=>a.auto==='Sim'||a.auto==='Em andamento').length;
+  document.getElementById('kpi-critica').textContent = activities.filter(a=>a.prio==='Alta').length;
+}
+
+// ── RENDER ────────────────────────────────────────────────
+function renderTable() {
+  const filtered = getFiltered();
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = '';
+
+  if(!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state"><p>Nenhuma atividade encontrada.</p><small>Clique em "+ Nova atividade" para adicionar.</small></div></td></tr>`;
+  } else {
+    filtered.forEach(a => {
+      const tr = document.createElement('tr');
+      const badgeClass = AREA_BADGE[a.area] || 'badge-facilities';
+      tr.innerHTML = `
+        <td class="area-cell">
+          <div class="area-name">${a.area}</div>
+          <span class="area-badge ${badgeClass}">${a.area}</span>
+        </td>
+        <td class="cargo-cell" title="${a.cargo}">${a.cargo}</td>
+        <td class="atividade-cell" title="${a.atividade}">${a.atividade}</td>
+        <td class="tempo-cell">${a.tempo}</td>
+        <td class="carga-cell">
+          <div class="carga-wrapper">
+            <span class="carga-num">${a.carga}</span>
+            <div class="carga-bar-bg"><div class="carga-bar-fill ${cargaColor(a.carga)}" style="width:${Math.min(a.carga,100)}%"></div></div>
+          </div>
+        </td>
+        <td class="dropdown-cell">
+          <div class="pill-select-wrapper">
+            <span class="pill ${freqPill(a.freq)}">${a.freq}</span>
+            <select class="inline-select" onchange="updateField('${a.id}','freq',this.value)">
+              ${['Diária','Semanal','Mensal','Trimestral','Anual'].map(o=>`<option ${o===a.freq?'selected':''}>${o}</option>`).join('')}
+            </select>
+          </div>
+        </td>
+        <td class="dropdown-cell">
+          <div class="pill-select-wrapper">
+            <span class="pill ${prioPill(a.prio)}">${a.prio}</span>
+            <select class="inline-select" onchange="updateField('${a.id}','prio',this.value)">
+              ${['Alta','Média','Baixa'].map(o=>`<option ${o===a.prio?'selected':''}>${o}</option>`).join('')}
+            </select>
+          </div>
+        </td>
+        <td class="dropdown-cell">
+          <div class="pill-select-wrapper">
+            <span class="pill ${autoPill(a.auto)}">${a.auto}</span>
+            <select class="inline-select" onchange="updateField('${a.id}','auto',this.value)">
+              ${['Sim','Não','Em andamento'].map(o=>`<option ${o===a.auto?'selected':''}>${o}</option>`).join('')}
+            </select>
+          </div>
+        </td>
+        <td class="toggle-cell">
+          <div class="toggle-wrapper">
+            <div class="toggle-row">
+              <div class="${a.treinSim?'toggle on':'toggle off'}" onclick="toggleTrein('${a.id}')"></div>
+              <span class="toggle-label">${a.treinSim?'✓ Sim':'Não'}</span>
+            </div>
+            <input class="treinamento-quem" type="text" value="${a.treinQuem||''}" placeholder="Quem treina?" onblur="updateField('${a.id}','treinQuem',this.value)">
+            <div class="treinamento-quando">${a.treinQuando||'Quando?'}</div>
+          </div>
+        </td>
+        <td class="backup-cell" title="${a.backup||'—'}">${a.backup||'<span style="color:#555;font-style:italic">Quem cobre?</span>'}</td>
+        <td><button class="btn-del" onclick="deleteActivity('${a.id}')" title="Remover">✕</button></td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  const totalCarga = filtered.reduce((s,a)=>s+a.carga,0);
+  document.getElementById('ft-total').textContent = filtered.length;
+  document.getElementById('ft-carga').textContent = totalCarga;
+  document.getElementById('ft-auto').textContent = filtered.filter(a=>a.auto==='Sim'||a.auto==='Em andamento').length;
+  document.getElementById('ft-semtrein').textContent = filtered.filter(a=>!a.treinSim).length;
+  document.getElementById('ft-sembackup').textContent = filtered.filter(a=>!a.backup).length;
+  updateKPIs();
+  updateFilters();
+}
+
+// ── ACTIONS ───────────────────────────────────────────────
+function updateField(id, field, value) {
+  const a = activities.find(x=>x.id===id);
+  if(!a) return;
+  a[field] = value;
+  renderTable();
+  scheduleSave();
+}
+
+function toggleTrein(id) {
+  const a = activities.find(x=>x.id===id);
+  if(!a) return;
+  a.treinSim = !a.treinSim;
+  renderTable();
+  scheduleSave();
+}
+
+function deleteActivity(id) {
+  if(!confirm('Remover esta atividade?')) return;
+  activities = activities.filter(x=>x.id!==id);
+  renderTable();
+  saveData();
+}
+
+// ── MODAL ─────────────────────────────────────────────────
+function openModal(id) {
+  editId = id || null;
+  document.getElementById('modal-title').textContent = editId ? 'Editar Atividade' : 'Nova Atividade';
+  if(editId) {
+    const a = activities.find(x=>x.id===editId);
+    document.getElementById('m-area').value = a.area;
+    document.getElementById('m-cargo').value = a.cargo;
+    document.getElementById('m-atividade').value = a.atividade;
+    document.getElementById('m-tempo').value = a.tempo;
+    document.getElementById('m-carga').value = a.carga;
+    document.getElementById('m-freq').value = a.freq;
+    document.getElementById('m-prio').value = a.prio;
+    document.getElementById('m-auto').value = a.auto;
+    document.getElementById('m-trein-quem').value = a.treinQuem||'';
+    document.getElementById('m-trein-quando').value = a.treinQuando||'';
+    document.getElementById('m-backup').value = a.backup||'';
+  } else {
+    ['m-cargo','m-atividade','m-tempo','m-trein-quem','m-trein-quando','m-backup'].forEach(i=>document.getElementById(i).value='');
+    document.getElementById('m-carga').value = 0;
+    document.getElementById('m-area').value = 'Facilities';
+    document.getElementById('m-freq').value = 'Diária';
+    document.getElementById('m-prio').value = 'Média';
+    document.getElementById('m-auto').value = 'Não';
+  }
+  document.getElementById('modal').classList.add('active');
+}
+function closeModal() { document.getElementById('modal').classList.remove('active'); }
+
+async function saveActivity() {
+  const cargo = document.getElementById('m-cargo').value.trim();
+  const atividade = document.getElementById('m-atividade').value.trim();
+  if(!cargo || !atividade) { showToast('Preencha Cargo e Atividade.', true); return; }
+  const treinQuem = document.getElementById('m-trein-quem').value.trim();
+  const obj = {
+    id: editId || 'id_' + Date.now(),
+    area: document.getElementById('m-area').value,
+    cargo, atividade,
+    tempo: document.getElementById('m-tempo').value.trim(),
+    carga: parseInt(document.getElementById('m-carga').value)||0,
+    freq: document.getElementById('m-freq').value,
+    prio: document.getElementById('m-prio').value,
+    auto: document.getElementById('m-auto').value,
+    treinSim: treinQuem !== '',
+    treinQuem,
+    treinQuando: document.getElementById('m-trein-quando').value.trim(),
+    backup: document.getElementById('m-backup').value.trim(),
+  };
+  if(editId) { const idx = activities.findIndex(x=>x.id===editId); activities[idx] = obj; }
+  else activities.push(obj);
+  closeModal();
+  renderTable();
+  showLoading('Salvando...');
+  await saveData();
+  hideLoading();
+}
+
+// ── EXPORT ────────────────────────────────────────────────
+function exportCSV() {
+  const headers = ['Área','Cargo','Atividade','Tempo Est.','Carga (%)','Frequência','Prioridade','Automação','Treinamento','Treina Quem','Data Treinamento','Backup'];
+  const rows = activities.map(a=>[
+    a.area,a.cargo,a.atividade,a.tempo,a.carga,a.freq,a.prio,a.auto,
+    a.treinSim?'Sim':'Não',a.treinQuem||'',a.treinQuando||'',a.backup||''
+  ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','));
+  const csv = [headers.join(','),...rows].join('\n');
+  const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob); 
+  const a = document.createElement('a'); a.href=url; a.download='matriz_atividades.csv'; a.click();
+}
+
+// ── INIT ──────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
